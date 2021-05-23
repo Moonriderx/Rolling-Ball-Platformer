@@ -7,7 +7,7 @@ namespace Moonrider
     public class MovingBall : MonoBehaviour
     {
 
-        Rigidbody body;
+        Rigidbody rigidBody;
 
         [SerializeField, Range(0f, 100f)]
         float maxSpeed = 10f;
@@ -32,7 +32,7 @@ namespace Moonrider
         // Start is called before the first frame update    
         void Start()
         {
-            body = GetComponent<Rigidbody>();
+            rigidBody = GetComponent<Rigidbody>();
         }
 
         // Update is called once per frame
@@ -58,14 +58,14 @@ namespace Moonrider
             float maxSpeedChange = acceleration * Time.deltaTime;
             velocity.x = Mathf.MoveTowards(velocity.x, desiredVelocity.x, maxSpeedChange);
             velocity.z = Mathf.MoveTowards(velocity.z, desiredVelocity.z, maxSpeedChange);
-            body.velocity = velocity;
+            rigidBody.velocity = velocity;
 
             if (desiredJump)
             {
                 desiredJump = false;
                 Jump();
             }
-            body.velocity = velocity;
+            rigidBody.velocity = velocity;
             onGround = false;
 
 
@@ -73,7 +73,7 @@ namespace Moonrider
 
         private void UpdateState()
         {
-            velocity = body.velocity;
+            velocity = rigidBody.velocity;
             if (onGround)
             {
                 jumpPhase = 0;
