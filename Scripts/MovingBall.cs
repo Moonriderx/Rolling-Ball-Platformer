@@ -21,18 +21,38 @@ namespace Moonrider
         [SerializeField, Range(0, 5)]
         int maxAirJumps = 0;
 
+        [SerializeField, Range(0f, 90f)]
+        float maxGroundAngle = 25f;
+
 
         Vector3 velocity;
         Vector3 desiredVelocity;
+        Vector3 contactNormal;
         bool desiredJump;
-        public bool onGround;
-        int jumpPhase;
+        int groundContactCount;
+        bool OnGround => groundContactCount > 0;
+        /* the line above is the same like ->
+         bool OnGround {
+		get {
+			return groundContactCount > 0;
+		}
+        } 
+         */
 
+
+        int jumpPhase;
+        float minGroundDotProduct;
+
+        private void Awake()
+        {
+            rigidBody = GetComponent<Rigidbody>();
+            OnValidate();
+        }
 
         // Start is called before the first frame update    
         void Start()
         {
-            rigidBody = GetComponent<Rigidbody>();
+            //rigidBody = GetComponent<Rigidbody>();
         }
 
         // Update is called once per frame
@@ -45,6 +65,7 @@ namespace Moonrider
 
             desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
             desiredJump |= Input.GetButtonDown("Jump");
+            
         }
 
          
@@ -54,11 +75,8 @@ namespace Moonrider
 
             
             UpdateState();
-            float acceleration = onGround ? maxAcceleration : maxAirAcceleration;
-            float maxSpeedChange = acceleration * Time.deltaTime;
-            velocity.x = Mathf.MoveTowards(velocity.x, desiredVelocity.x, maxSpeedChange);
-            velocity.z = Mathf.MoveTowards(velocity.z, desiredVelocity.z, maxSpeedChange);
-            rigidBody.velocity = velocity;
+            AdjustVelocity();
+           
 
             if (desiredJump)
             {
@@ -66,7 +84,7 @@ namespace Moonrider
                 Jump();
             }
             rigidBody.velocity = velocity;
-            onGround = false;
+            ClearState();
 
 
         }
@@ -74,24 +92,33 @@ namespace Moonrider
         private void UpdateState()
         {
             velocity = rigidBody.velocity;
-            if (onGround)
+            if (OnGround)
             {
                 jumpPhase = 0;
+                if (groundContactCount > 1)
+                {
+                    contactNormal.Normalize();
+                }
+            }
+            else
+            {
+                contactNormal = Vector3.up;
             }
         }
 
         void Jump()
         {
             
-                if (onGround || jumpPhase < maxAirJumps)
+                if (OnGround || jumpPhase < maxAirJumps)
                 {
                     float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
-                if (velocity.y > 0 )
+                float alignedSpeed = Vector3.Dot(velocity, contactNormal);
+                if (alignedSpeed > 0 )
                 {
-                    jumpSpeed = Mathf.Max(jumpSpeed - velocity.y, 0f);
+                    jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
                 }
                     jumpPhase += 1;
-                velocity.y += jumpSpeed;
+                velocity += contactNormal * jumpSpeed;
                 }
         }
 
@@ -110,8 +137,46 @@ namespace Moonrider
             for (int i = 0; i < collision.contactCount; i++)
             {
                 Vector3 normal = collision.GetContact(i).normal; // The normal is the direction that the sphere should be pushed, which is directly away from the collision surface.
-                onGround |= normal.y >= 0.9f;
+                if (normal.y >= minGroundDotProduct)
+                {
+                    groundContactCount += 1;
+                    contactNormal += normal;
+                }
             }
+        }
+
+         void OnValidate()
+        {
+            minGroundDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
+        }
+
+        Vector3 ProjectOnContactPlane(Vector3 vector)
+        {
+            return vector - contactNormal * Vector3.Dot(vector, contactNormal);
+        }
+
+        void AdjustVelocity ()
+        {
+            Vector3 xAxis = ProjectOnContactPlane(Vector3.right).normalized;
+            Vector3 zAxis = ProjectOnContactPlane(Vector3.forward).normalized;
+
+            float currentX = Vector3.Dot(velocity, xAxis);
+            float currentZ = Vector3.Dot(velocity, zAxis);
+
+            float acceleration = OnGround ? maxAcceleration : maxAirAcceleration;
+            float maxSpeedChange = acceleration * Time.deltaTime;
+
+            float newX = Mathf.MoveTowards(currentX, desiredVelocity.x, maxSpeedChange);
+            float newZ = Mathf.MoveTowards(currentZ, desiredVelocity.z, maxSpeedChange);
+
+            velocity += xAxis * (newX - currentX) + zAxis * (newZ - currentZ);
+            
+        }
+
+        void ClearState()
+        {
+            groundContactCount = 0;
+            contactNormal = Vector3.zero;
         }
     }
 
