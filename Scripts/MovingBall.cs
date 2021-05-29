@@ -30,6 +30,7 @@ namespace Moonrider
         Vector3 contactNormal;
         bool desiredJump;
         int groundContactCount;
+        int stepsSinceLastGrounded;
         bool OnGround => groundContactCount > 0;
         /* the line above is the same like ->
          bool OnGround {
@@ -65,7 +66,8 @@ namespace Moonrider
 
             desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
             desiredJump |= Input.GetButtonDown("Jump");
-            
+
+            GetComponent<Renderer>().material.SetColor("_Color", OnGround ? Color.black : Color.white);
         }
 
          
@@ -91,9 +93,11 @@ namespace Moonrider
 
         private void UpdateState()
         {
+            stepsSinceLastGrounded += 1;
             velocity = rigidBody.velocity;
-            if (OnGround)
+            if (OnGround || SnapToGround())
             {
+                stepsSinceLastGrounded = 0;
                 jumpPhase = 0;
                 if (groundContactCount > 1)
                 {
@@ -177,6 +181,33 @@ namespace Moonrider
         {
             groundContactCount = 0;
             contactNormal = Vector3.zero;
+        }
+
+        bool SnapToGround()
+        {
+            if (stepsSinceLastGrounded > 1)
+            {
+                return false;
+            }
+
+            if (!Physics.Raycast(rigidBody.position, Vector3.down, out RaycastHit hit))
+            {
+                return false;
+            }
+
+            if (hit.normal.y < minGroundDotProduct)
+            {
+                return false;
+            }
+            groundContactCount = 1;
+            contactNormal = hit.normal;
+            float speed = velocity.magnitude;
+            float dot = Vector3.Dot(velocity, hit.normal);
+            if (dot > 0f)
+            {
+                velocity = (velocity - hit.normal * dot).normalized * speed;
+            }
+            return true;
         }
     }
 
