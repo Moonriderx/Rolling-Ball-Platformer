@@ -22,15 +22,23 @@ namespace Moonrider
         int maxAirJumps = 0;
 
         [SerializeField, Range(0f, 90f)]
-        float maxGroundAngle = 25f;
+        float maxGroundAngle = 25f, maxStairsAngle = 50f;
 
+        [SerializeField, Range(0f, 100f)]
+        float maxSnapSpeed = 100f;
+
+        [SerializeField, Min(0f)]
+        float probeDistance = 1f;
+
+        [SerializeField]
+        LayerMask probeMask = -1, stairMask = -1;
 
         Vector3 velocity;
         Vector3 desiredVelocity;
         Vector3 contactNormal;
         bool desiredJump;
         int groundContactCount;
-        int stepsSinceLastGrounded;
+        int stepsSinceLastGrounded, stepsSinceLastJump;
         bool OnGround => groundContactCount > 0;
         /* the line above is the same like ->
          bool OnGround {
@@ -42,7 +50,7 @@ namespace Moonrider
 
 
         int jumpPhase;
-        float minGroundDotProduct;
+        float minGroundDotProduct, minStairsDotProduct;
 
         private void Awake()
         {
@@ -94,9 +102,11 @@ namespace Moonrider
         private void UpdateState()
         {
             stepsSinceLastGrounded += 1;
+            stepsSinceLastJump += 1;
             velocity = rigidBody.velocity;
             if (OnGround || SnapToGround())
             {
+
                 stepsSinceLastGrounded = 0;
                 jumpPhase = 0;
                 if (groundContactCount > 1)
@@ -121,6 +131,7 @@ namespace Moonrider
                 {
                     jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
                 }
+                    stepsSinceLastJump = 0;
                     jumpPhase += 1;
                 velocity += contactNormal * jumpSpeed;
                 }
@@ -152,6 +163,7 @@ namespace Moonrider
          void OnValidate()
         {
             minGroundDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
+            minStairsDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
         }
 
         Vector3 ProjectOnContactPlane(Vector3 vector)
@@ -185,12 +197,18 @@ namespace Moonrider
 
         bool SnapToGround()
         {
-            if (stepsSinceLastGrounded > 1)
+            if (stepsSinceLastGrounded > 1 || stepsSinceLastJump <= 2)
             {
                 return false;
             }
 
-            if (!Physics.Raycast(rigidBody.position, Vector3.down, out RaycastHit hit))
+            float speed = velocity.magnitude;
+            if (speed > maxSnapSpeed)
+            {
+                return false;
+            }
+
+            if (!Physics.Raycast(rigidBody.position, Vector3.down, out RaycastHit hit, probeDistance, probeMask))
             {
                 return false;
             }
@@ -201,7 +219,6 @@ namespace Moonrider
             }
             groundContactCount = 1;
             contactNormal = hit.normal;
-            float speed = velocity.magnitude;
             float dot = Vector3.Dot(velocity, hit.normal);
             if (dot > 0f)
             {
