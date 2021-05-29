@@ -78,15 +78,15 @@ namespace Moonrider
             GetComponent<Renderer>().material.SetColor("_Color", OnGround ? Color.black : Color.white);
         }
 
-         
+
 
         private void FixedUpdate()
         {
 
-            
+
             UpdateState();
             AdjustVelocity();
-           
+
 
             if (desiredJump)
             {
@@ -122,19 +122,19 @@ namespace Moonrider
 
         void Jump()
         {
-            
-                if (OnGround || jumpPhase < maxAirJumps)
-                {
-                    float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
+
+            if (OnGround || jumpPhase < maxAirJumps)
+            {
+                float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
                 float alignedSpeed = Vector3.Dot(velocity, contactNormal);
-                if (alignedSpeed > 0 )
+                if (alignedSpeed > 0)
                 {
                     jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
                 }
-                    stepsSinceLastJump = 0;
-                    jumpPhase += 1;
+                stepsSinceLastJump = 0;
+                jumpPhase += 1;
                 velocity += contactNormal * jumpSpeed;
-                }
+            }
         }
 
         private void OnCollisionEnter(Collision collision)
@@ -149,10 +149,11 @@ namespace Moonrider
 
         void EvaluateCollision(Collision collision)
         {
+            float minDot = GetMinDot(collision.gameObject.layer);
             for (int i = 0; i < collision.contactCount; i++)
             {
                 Vector3 normal = collision.GetContact(i).normal; // The normal is the direction that the sphere should be pushed, which is directly away from the collision surface.
-                if (normal.y >= minGroundDotProduct)
+                if (normal.y >= minDot)
                 {
                     groundContactCount += 1;
                     contactNormal += normal;
@@ -160,7 +161,7 @@ namespace Moonrider
             }
         }
 
-         void OnValidate()
+        void OnValidate()
         {
             minGroundDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
             minStairsDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
@@ -171,7 +172,7 @@ namespace Moonrider
             return vector - contactNormal * Vector3.Dot(vector, contactNormal);
         }
 
-        void AdjustVelocity ()
+        void AdjustVelocity()
         {
             Vector3 xAxis = ProjectOnContactPlane(Vector3.right).normalized;
             Vector3 zAxis = ProjectOnContactPlane(Vector3.forward).normalized;
@@ -186,7 +187,7 @@ namespace Moonrider
             float newZ = Mathf.MoveTowards(currentZ, desiredVelocity.z, maxSpeedChange);
 
             velocity += xAxis * (newX - currentX) + zAxis * (newZ - currentZ);
-            
+
         }
 
         void ClearState()
@@ -213,7 +214,7 @@ namespace Moonrider
                 return false;
             }
 
-            if (hit.normal.y < minGroundDotProduct)
+            if (hit.normal.y < GetMinDot(hit.collider.gameObject.layer))
             {
                 return false;
             }
@@ -226,8 +227,13 @@ namespace Moonrider
             }
             return true;
         }
-    }
+
+
+        float GetMinDot(int layer)
+        {
+            return (stairMask & (1 << layer)) == 0 ? minStairsDotProduct : minStairsDotProduct;
+
+        }
 
     }
-
-
+}
