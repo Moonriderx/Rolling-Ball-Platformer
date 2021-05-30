@@ -35,11 +35,13 @@ namespace Moonrider
 
         Vector3 velocity;
         Vector3 desiredVelocity;
-        Vector3 contactNormal;
+        Vector3 contactNormal, steepNormal;
         bool desiredJump;
-        int groundContactCount;
+        int groundContactCount, steepContactCount;
         int stepsSinceLastGrounded, stepsSinceLastJump;
         bool OnGround => groundContactCount > 0;
+
+        bool OnSteep => steepContactCount > 0;
         /* the line above is the same like ->
          bool OnGround {
 		get {
@@ -75,7 +77,7 @@ namespace Moonrider
             desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
             desiredJump |= Input.GetButtonDown("Jump");
 
-            GetComponent<Renderer>().material.SetColor("_Color", OnGround ? Color.black : Color.white);
+            
         }
 
 
@@ -104,11 +106,15 @@ namespace Moonrider
             stepsSinceLastGrounded += 1;
             stepsSinceLastJump += 1;
             velocity = rigidBody.velocity;
-            if (OnGround || SnapToGround())
+            if (OnGround || SnapToGround() || CheckSteepContacts())
             {
 
                 stepsSinceLastGrounded = 0;
-                jumpPhase = 0;
+                if (stepsSinceLastJump > 1)
+                {
+                    jumpPhase = 0;
+                }
+                
                 if (groundContactCount > 1)
                 {
                     contactNormal.Normalize();
@@ -122,19 +128,40 @@ namespace Moonrider
 
         void Jump()
         {
-
-            if (OnGround || jumpPhase < maxAirJumps)
+            Vector3 jumpDirection;
+               if (OnGround)
             {
-                float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
-                float alignedSpeed = Vector3.Dot(velocity, contactNormal);
+                jumpDirection = contactNormal;
+            }
+               else if (OnSteep)
+            {
+                jumpDirection = steepNormal;
+                jumpPhase = 0;
+            }
+               else if (maxAirJumps > 0 && jumpPhase <= maxAirJumps)
+            {
+                if (jumpPhase == 0)
+                {
+                    jumpPhase = 1;
+                }
+                jumpDirection = contactNormal;
+            }
+            else
+            {
+                return;
+            }
+            stepsSinceLastJump = 0;
+            jumpPhase += 1;
+            float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
+                jumpDirection = (jumpDirection + Vector3.up).normalized;
+                float alignedSpeed = Vector3.Dot(velocity, jumpDirection);
                 if (alignedSpeed > 0)
                 {
                     jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
                 }
-                stepsSinceLastJump = 0;
-                jumpPhase += 1;
-                velocity += contactNormal * jumpSpeed;
-            }
+                
+                velocity += jumpDirection * jumpSpeed;
+            
         }
 
         private void OnCollisionEnter(Collision collision)
@@ -157,6 +184,11 @@ namespace Moonrider
                 {
                     groundContactCount += 1;
                     contactNormal += normal;
+                }
+                else if (normal.y > -0.01f)
+                {
+                    steepContactCount += 1;
+                    steepNormal += normal;
                 }
             }
         }
@@ -192,8 +224,8 @@ namespace Moonrider
 
         void ClearState()
         {
-            groundContactCount = 0;
-            contactNormal = Vector3.zero;
+            groundContactCount = steepContactCount = 0;
+            contactNormal = steepNormal = Vector3.zero;
         }
 
         bool SnapToGround()
@@ -233,6 +265,21 @@ namespace Moonrider
         {
             return (stairMask & (1 << layer)) == 0 ? minStairsDotProduct : minStairsDotProduct;
 
+        }
+
+        bool CheckSteepContacts()
+        {
+            if (steepContactCount > 1)
+            {
+                steepNormal.Normalize();
+                if (steepNormal.y >= minGroundDotProduct)
+                {
+                    groundContactCount = 1;
+                    contactNormal = steepNormal;
+                    return true;
+                }
+            }
+            return false;
         }
 
     }
